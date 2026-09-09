@@ -1,0 +1,6 @@
+{
+  "python.condaPath": "/opt/miniconda3/bin/conda",
+  // 3. 새 터미널이 열릴 때 해당 가상환경(myenv) 자동 활성화
+  "python.terminal.activateEnvironment": true,
+  "python.terminal.activateEnvInCurrentTerminal": true
+}
