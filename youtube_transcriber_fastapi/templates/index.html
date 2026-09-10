@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Audio Transcriber (FastAPI)</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Marked.js (마크다운 파서) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+
+    body {
+      font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+    }
+
+    .prose h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      color: #111827;
+    }
+
+    .prose h2 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+      color: #1f2937;
+    }
+
+    .prose h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-top: 0.75rem;
+      margin-bottom: 0.25rem;
+      color: #374151;
+    }
+
+    .prose p {
+      margin-bottom: 0.75rem;
+      line-height: 1.6;
+      color: #4b5563;
+    }
+
+    .prose ul {
+      list-style-type: disc;
+      padding-left: 1.25rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .prose li {
+      margin-bottom: 0.25rem;
+      color: #4b5563;
+    }
+
+    .prose hr {
+      margin: 1rem 0;
+      border-color: #e5e7eb;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-50 text-gray-900 min-h-screen flex flex-col">
+
+  <!-- 🌟 상단 헤더 & 네비게이션 바 (가림 현상 없이 깔끔한 플랫 디자인) -->
+  <header class="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <!-- 좌측: 브랜드 로고/타이틀 -->
+      <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('transcribe')">
+        <span class="text-2xl">🎙️</span>
+        <span class="text-xl font-bold tracking-tight text-gray-900">YouTube Transcriber <span
+            class="text-blue-600 text-sm font-semibold ml-1">FastAPI</span></span>
+      </div>
+
+      <!-- 우측: 상단 메뉴 네비게이션 버튼 & API 키 설정 -->
+      <div class="flex items-center space-x-3">
+        <div class="bg-gray-100 p-1 rounded-xl flex space-x-1">
+          <button id="nav-btn-transcribe" onclick="switchTab('transcribe')"
+            class="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 bg-white text-gray-900 shadow-sm">
+            🎙️ 새 영상 변환
+          </button>
+          <button id="nav-btn-history" onclick="switchTab('history')"
+            class="px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 text-gray-600 hover:text-gray-900">
+            📜 변환 기록 (History)
+          </button>
+        </div>
+
+        <!-- API 키 설정 버튼 -->
+        <button onclick="toggleApiKeyModal()" class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+          title="API 키 설정">
+          ⚙️
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 컨텐츠 영역 -->
+  <main class="flex-grow max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- ====================================================================== -->
+    <!-- 1. 새 영상 변환 뷰 (Transcribe View) -->
+    <!-- ====================================================================== -->
+    <section id="view-transcribe" class="space-y-6">
+      <!-- 타이틀 & 안내 -->
+      <div>
+        <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">유튜브 오디오 추출 & AI 트랜스크립터</h1>
+        <p class="text-gray-500 mt-1 text-base">유튜브 영상 URL을 입력하면 고음질 오디오를 다운로드하고, Gemini 3.6 Flash가 전문 전사 및 핵심 요약을
+          생성합니다.</p>
+      </div>
+
+      <!-- 입력창 카드 -->
+      <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-4">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input type="text" id="youtube-url-input"
+            placeholder="https://www.youtube.com/watch?v=... 또는 https://youtu.be/..."
+            class="flex-grow px-4 py-3 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base" />
+          <button id="start-btn" onclick="startTranscription()"
+            class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition duration-150 flex items-center justify-center space-x-2 shadow-sm">
+            <span>🚀 변환 시작</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 진행 상태 인디케이터 (초기 숨김) -->
+      <div id="loading-card" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-6 text-blue-900">
+        <div class="flex items-center space-x-4">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <div>
+            <h3 class="font-bold text-lg" id="loading-status-title">영상 및 오디오 분석 중...</h3>
+            <p class="text-blue-700 text-sm mt-0.5" id="loading-status-desc">유튜브 영상 정보를 가져오고 고음질 오디오 스트림을 추출하고 있습니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 변환 완료 결과 영역 (초기 숨김) -->
+      <div id="result-card" class="hidden space-y-6">
+        <!-- 비디오 정보 및 오디오 플레이어 카드 -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div class="flex flex-col md:flex-row gap-6 items-start">
+            <img id="result-thumbnail" src="" alt="Thumbnail"
+              class="w-full md:w-64 rounded-xl shadow-sm object-cover aspect-video" />
+            <div class="flex-grow space-y-3">
+              <h2 id="result-title" class="text-xl font-bold text-gray-900"></h2>
+              <p class="text-sm text-gray-600">
+                <span class="font-medium text-gray-900" id="result-uploader"></span> •
+                재생 시간: <span id="result-duration" class="font-semibold text-blue-600"></span>
+              </p>
+
+              <!-- 오디오 재생기 -->
+              <div class="pt-2">
+                <label class="block text-xs font-semibold text-gray-500 mb-1">🎵 추출된 오디오 바로 듣기</label>
+                <audio id="result-audio" controls class="w-full rounded-lg"></audio>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 트랜스크립트 리포트 카드 -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div class="flex items-center justify-between border-b border-gray-100 pb-4 mb-4">
+            <h3 class="text-lg font-bold text-gray-900 flex items-center space-x-2">
+              <span>📑 Gemini AI 전사 & 분석 리포트</span>
+            </h3>
+            <div class="flex space-x-2">
+              <button onclick="copyTranscript()"
+                class="px-3 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
+                📋 텍스트 복사
+              </button>
+              <button onclick="downloadTranscriptTxt()"
+                class="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition shadow-sm">
+                💾 .txt 다운로드
+              </button>
+            </div>
+          </div>
+
+          <div id="result-transcript-content" class="prose max-w-none text-gray-800"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====================================================================== -->
+    <!-- 2. 변환 히스토리 뷰 (History View) -->
+    <!-- ====================================================================== -->
+    <section id="view-history" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight">변환 히스토리 (History)</h1>
+          <p class="text-gray-500 mt-1 text-base">지금까지 변환했던 모든 유튜브 영상의 트랜스크립트와 오디오를 다시 열람할 수 있습니다.</p>
+        </div>
+        <button onclick="clearAllHistory()"
+          class="self-start sm:self-auto px-4 py-2 border border-red-300 text-red-600 hover:bg-red-50 text-sm font-semibold rounded-xl transition">
+          🗑️ 전체 기록 삭제
+        </button>
+      </div>
+
+      <!-- 검색창 및 통계 -->
+      <div
+        class="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 flex flex-col sm:flex-row gap-4 items-center justify-between">
+        <div class="text-sm text-gray-600 font-medium">
+          총 <span id="history-count" class="font-bold text-blue-600 text-base">0</span>개의 변환 기록
+        </div>
+        <input type="text" id="history-search-input" oninput="renderHistoryList()" placeholder="🔍 영상 제목 또는 채널명 검색..."
+          class="w-full sm:w-72 px-3 py-2 text-sm rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+      </div>
+
+      <!-- 히스토리 목록 컨테이너 -->
+      <div id="history-list-container" class="space-y-4">
+        <!-- JS로 동적 생성됨 -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- API Key 설정 모달 -->
+  <div id="api-key-modal"
+    class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4 border border-gray-200">
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-bold text-gray-900">⚙️ Google Gemini API Key 설정</h3>
+        <button onclick="toggleApiKeyModal()"
+          class="text-gray-400 hover:text-gray-600 text-xl font-bold">&times;</button>
+      </div>
+      <p class="text-sm text-gray-500">
+        Google AI Studio에서 발급받은 API 키를 브라우저 로컬스토리지에 저장합니다. (서버 환경변수에 이미 등록되어 있다면 비워두셔도 됩니다)
+      </p>
+      <input type="password" id="api-key-input" placeholder="AIzaSy..."
+        class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+      <div class="flex justify-end space-x-2 pt-2">
+        <button onclick="toggleApiKeyModal()"
+          class="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100">취소</button>
+        <button onclick="saveApiKey()"
+          class="px-4 py-2 rounded-lg text-sm bg-blue-600 hover:bg-blue-700 text-white font-semibold">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 푸터 -->
+  <footer class="bg-white border-t border-gray-200 py-6 text-center text-xs text-gray-500">
+    <p>YouTube Audio Transcriber with FastAPI & Gemini 3.6 Flash • Google AI Studio Tutorial</p>
+  </footer>
+
+  <!-- 프론트엔드 비동기 로직 -->
+  <script>
+    let currentTranscript = "";
+    let currentVideoTitle = "youtube_transcript";
+    let historyCache = [];
+
+    // 로컬스토리지에서 API 키 불러오기
+    document.addEventListener("DOMContentLoaded", () => {
+      const savedKey = localStorage.getItem("GEMINI_API_KEY");
+      if (savedKey) {
+        document.getElementById("api-key-input").value = savedKey;
+      }
+    });
+
+    function toggleApiKeyModal() {
+      const modal = document.getElementById("api-key-modal");
+      modal.classList.toggle("hidden");
+    }
+
+    function saveApiKey() {
+      const key = document.getElementById("api-key-input").value.trim();
+      if (key) {
+        localStorage.setItem("GEMINI_API_KEY", key);
+      } else {
+        localStorage.removeItem("GEMINI_API_KEY");
+      }
+      toggleApiKeyModal();
+      alert("API 키 설정이 저장되었습니다.");
+    }
+
+    // 🌟 상단 탭 전환 함수
+    function switchTab(tabName) {
+      const viewTranscribe = document.getElementById("view-transcribe");
+      const viewHistory = document.getElementById("view-history");
+      const btnTranscribe = document.getElementById("nav-btn-transcribe");
+      const btnHistory = document.getElementById("nav-btn-history");
+
+      if (tabName === "transcribe") {
+        viewTranscribe.classList.remove("hidden");
+        viewHistory.classList.add("hidden");
+
+        btnTranscribe.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 bg-white text-gray-900 shadow-sm";
+        btnHistory.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 text-gray-600 hover:text-gray-900";
+      } else {
+        viewTranscribe.classList.add("hidden");
+        viewHistory.classList.remove("hidden");
+
+        btnHistory.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 bg-white text-gray-900 shadow-sm";
+        btnTranscribe.className = "px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-150 text-gray-600 hover:text-gray-900";
+
+        loadHistory();
+      }
+    }
+
+    // 변환 시작
+    async function startTranscription() {
+      const url = document.getElementById("youtube-url-input").value.trim();
+      if (!url) {
+        alert("유튜브 영상 URL을 입력해 주세요.");
+        return;
+      }
+
+      const apiKey = localStorage.getItem("GEMINI_API_KEY") || "";
+      const startBtn = document.getElementById("start-btn");
+      const loadingCard = document.getElementById("loading-card");
+      const resultCard = document.getElementById("result-card");
+      const loadingStatusTitle = document.getElementById("loading-status-title");
+      const loadingStatusDesc = document.getElementById("loading-status-desc");
+
+      startBtn.disabled = true;
+      startBtn.classList.add("opacity-50", "cursor-not-allowed");
+      loadingCard.classList.remove("hidden");
+      resultCard.classList.add("hidden");
+
+      loadingStatusTitle.innerText = "유튜브 오디오 다운로드 중...";
+      loadingStatusDesc.innerText = "고음질 오디오 스트림을 안전하게 추출하여 서버에 보관하고 있습니다.";
+
+      try {
+        ) const response = await fetch("/api/transcribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: url, api_key: apiKey }),
+      };
+
+        const resData = await response.json();
+        if (!response.ok) {
+          throw new Error(resData.detail || "변환에 실패했습니다.");
+        }
+
+        const data = resData.data;
+        currentTranscript = data.transcript;
+        currentVideoTitle = data.video_info.title;
+
+        // 결과 표출
+        document.getElementById("result-title").innerText = data.video_info.title;
+        document.getElementById("result-uploader").innerText = data.video_info.uploader;
+        document.getElementById("result-duration").innerText = data.video_info.duration_str;
+        document.getElementById("result-thumbnail").src = data.video_info.thumbnail;
+        document.getElementById("result-audio").src = data.audio_url;
+
+        // 마크다운 파싱 렌더링
+        document.getElementById("result-transcript-content").innerHTML = marked.parse(data.transcript);
+
+        loadingCard.classList.add("hidden");
+        resultCard.classList.remove("hidden");
+
+      } catch (err) {
+        alert("⚠️ 오류 발생: " + err.message);
+        loadingCard.classList.add("hidden");
+      } finally {
+        startBtn.disabled = false;
+        startBtn.classList.remove("opacity-50", "cursor-not-allowed");
+      }
+    }
+
+    // 트랜스크립트 복사
+    function copyTranscript() {
+      if (!currentTranscript) return;
+      navigator.clipboard.writeText(currentTranscript);
+      alert("트랜스크립트 텍스트가 클립보드에 복사되었습니다!");
+    }
+
+    // 트랜스크립트 .txt 다운로드
+    function downloadTranscriptTxt() {
+      if (!currentTranscript) return;
+      const safeTitle = currentVideoTitle.replace(/[\\/*?:"<>|]/g, "_").slice(0, 30);
+      const blob = new Blob([currentTranscript], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeTitle}_transcript.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 히스토리 불러오기
+    async function loadHistory() {
+      try {
+        const response = await fetch("/api/history");
+        const resData = await response.json();
+        if (response.ok && resData.success) {
+          historyCache = resData.data;
+          renderHistoryList();
+        }
+      } catch (err) {
+        console.error("히스토리 로드 오류:", err);
+      }
+    }
+
+    // 히스토리 리스트 렌더링
+    function renderHistoryList() {
+      const container = document.getElementById("history-list-container");
+      const countEl = document.getElementById("history-count");
+      const searchInput = document.getElementById("history-search-input").value.trim().toLowerCase();
+
+      countEl.innerText = historyCache.length;
+
+      if (!historyCache || historyCache.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-12 text-center border border-gray-200">
+            <span class="text-4xl block mb-2">💡</span>
+            <h3 class="text-lg font-bold text-gray-700">아직 변환된 히스토리가 없습니다.</h3>
+            <p class="text-sm text-gray-500 mt-1">상단의 '새 영상 변환' 메뉴에서 영상을 변환해 보세요!</p>
+          </div>
+        `;
+        return;
+      }
+
+      const filtered = historyCache.filter(item => {
+        if (!searchInput) return true;
+        const titleMatch = (item.title || "").toLowerCase().includes(searchInput);
+        const uploaderMatch = (item.uploader || "").toLowerCase().includes(searchInput);
+        return titleMatch || uploaderMatch;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white rounded-2xl p-8 text-center border border-gray-200 text-gray-500">
+            검색 결과와 일치하는 변환 기록이 없습니다.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map((item, idx) => `
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div class="flex flex-col md:flex-row gap-6">
+            <img src="${item.thumbnail || ''}" class="w-full md:w-56 rounded-xl aspect-video object-cover" />
+            <div class="flex-grow space-y-2">
+              <div class="flex items-start justify-between">
+                <h3 class="text-lg font-bold text-gray-900">${item.title}</h3>
+                <button onclick="deleteHistoryItem('${item.id}')" class="text-gray-400 hover:text-red-600 text-sm font-semibold ml-2">🗑️ 삭제</button>
+              </div>
+              <p class="text-sm text-gray-500">
+                ${item.uploader || '알 수 없음'} • 변환: ${item.created_at} • 길이: ${item.duration_str}
+              </p>
+              
+              <!-- 오디오 플레이어 -->
+              ${item.audio_url ? `
+                <div class="pt-2">
+                  <audio src="${item.audio_url}" controls class="w-full rounded-lg"></audio>
+                </div>
+              ` : ''}
+
+              <!-- 펼치기 토글 및 액션 -->
+              <div class="pt-3 flex items-center justify-between">
+                <button onclick="toggleTranscriptDetails('details-${item.id}')" class="text-xs font-semibold text-blue-600 hover:underline">
+                  📖 트랜스크립트 열람 / 접기
+                </button>
+                <div class="space-x-2">
+                  ${item.youtube_url ? `<a href="${item.youtube_url}" target="_blank" class="px-3 py-1.5 text-xs font-semibold bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg inline-block">🔗 원본 유튜브</a>` : ''}
+                  <button onclick="downloadSpecificTxt('${encodeURIComponent(item.title)}', '${encodeURIComponent(item.transcript)}')" class="px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg">💾 .txt 다운로드</button>
+                </div>
+              </div>
+
+              <!-- 접힘 상세 내용 -->
+              <div id="details-${item.id}" class="hidden mt-4 pt-4 border-t border-gray-100 prose max-w-none text-sm text-gray-700">
+                ${marked.parse(item.transcript || '')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function toggleTranscriptDetails(id) {
+      const el = document.getElementById(id);
+      if (el) el.classList.toggle("hidden");
+    }
+
+    function downloadSpecificTxt(encTitle, encTranscript) {
+      const title = decodeURIComponent(encTitle);
+      const transcript = decodeURIComponent(encTranscript);
+      const safeTitle = title.replace(/[\\/*?:"<>|]/g, "_").slice(0, 30);
+      const blob = new Blob([transcript], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeTitle}_transcript.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    async function deleteHistoryItem(id) {
+      if (!confirm("이 히스토리 항목을 삭제하시겠습니까?")) return;
+      try {
+        const response = await fetch(`/api/history/${id}`, { method: "DELETE" });
+        if (response.ok) {
+          loadHistory();
+        }
+      } catch (err) {
+        alert("삭제 중 오류가 발생했습니다.");
+      }
+    }
+
+    async function clearAllHistory() {
+      if (!confirm("모든 변환 히스토리 기록을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return;
+      try {
+        const response = await fetch("/api/history", { method: "DELETE" });
+        if (response.ok) {
+          loadHistory();
+        }
+      } catch (err) {
+        alert("전체 삭제 중 오류가 발생했습니다.");
+      }
+    }
+  </script>
+</body>
+
+</html>
