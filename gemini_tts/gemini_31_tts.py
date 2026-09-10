@@ -79,7 +79,16 @@ The presenter just unveiled the benchmark results of Gemini 4.0 to huge applause
     if audio_chunks:
         full_audio_pcm = b"".join(audio_chunks)
         wav_data = convert_to_wav(full_audio_pcm, mime_type)
-        output_filename = "gemini_4_announcement.wav"
+        
+        # gemini_tts/outputs 폴더 자동 감지 및 생성
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        if os.path.basename(current_dir) == "gemini_tts":
+            output_dir = os.path.join(current_dir, "outputs")
+        else:
+            output_dir = os.path.join(current_dir, "gemini_tts", "outputs")
+        os.makedirs(output_dir, exist_ok=True)
+
+        output_filename = os.path.join(output_dir, "gemini_4_announcement.wav")
         save_binary_file(output_filename, wav_data)
         print(f"\n성공적으로 파일이 생성되었습니다: {output_filename}")
 

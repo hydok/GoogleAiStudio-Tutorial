@@ -1,22 +1,25 @@
 # 🎧 Gemini STT (Speech-to-Text) 코드 라인별(Line-by-Line) 완벽 해설
 
-이 문서는 Google AI Studio의 전용 오디오 전사 모델인 **`gemini-3.5-transcribe`**를 사용하여 로컬 음성 파일(`.wav`)을 실시간 텍스트로 변환(STT)하는 [`gemini_stt.py`](gemini_stt.py)의 모든 코드를 줄 단위로 상세히 설명합니다.
+이 문서는 Google AI Studio의 오디오 전사 모델인 **`gemini-3.5-transcribe`**를 사용하여, **`gemini_tts/outputs/` 폴더에 생성된 오디오 파일들을 자동으로 조회하고 사용자가 선택한 파일의 음성을 실시간 텍스트로 변환(STT)**하는 [`gemini_stt.py`](gemini_stt.py)의 모든 코드를 줄 단위로 상세히 설명합니다.
 
 ---
 
 ## 📌 전체 동작 흐름 요약
 
-1. **클라이언트 초기화**: 환경변수의 `GEMINI_API_KEY`로 Google GenAI 클라이언트를 생성합니다.
-2. **오디오 바이너리 로드**: 지정된 경로의 `.wav` 음성 파일을 바이너리(`rb`) 모드로 읽어 메모리에 올립니다.
-3. **멀티모달 Content 구성**: `types.Part.from_bytes()`를 사용하여 원시 오디오 바이트 데이터와 MIME 타입을 `parts`에 주입합니다.
-4. **전사 고급 옵션 설정**: 단어 단위 타임스탬프(`word_timestamp`) 및 화자 분리(`diarization`) 옵션을 활성화합니다.
-5. **실시간 스트리밍 출력**: `generate_content_stream`을 통해 모델이 음성을 인식하는 즉시 터미널에 한 글자씩 실시간으로 전사 결과를 출력합니다.
+```mermaid
+flowchart TD
+    A["1. gemini_tts/outputs 폴더 탐색"] --> B["2. 폴더 내 오디오 파일(.wav, .mp3 등) 목록 스캔"]
+    B --> C["3. 터미널 대화형 번호 선택 UI 표출"]
+    C --> D["4. 선택된 오디오 바이너리 로드 (open rb)"]
+    D --> E["5. Gemini STT 모델에 멀티모달 Part 주입"]
+    E --> F["6. 실시간 스트리밍 텍스트 전사 출력"]
+```
 
 ---
 
 ## 🔍 Line-by-Line 상세 코드 해설
 
-### 1행 ~ 6행: 라이브러리 임포트 및 SDK 로드
+### 1행 ~ 6행: 라이브러리 임포트
 
 ```python
 1: import os
@@ -27,130 +30,198 @@
 6: from google.genai import types
 ```
 
-* **1행 (`import os`)**: 시스템 환경변수에서 `GEMINI_API_KEY`를 가져오기 위한 파이썬 표준 라이브러리입니다.
-* **2행 (`import sys`)**: 터미널 명령행 인자(`sys.argv`)를 통해 사용자가 원하는 오디오 파일명을 직접 입력받기 위해 사용합니다.
-* **4행 (`from google import genai`)**: Google GenAI 공식 최신 SDK의 메인 클라이언트 클래스를 가져옵니다.
-* **6행 (`from google.genai import types`)**: 콘텐츠 객체(`Content`), 파트(`Part`), 전사 설정(`AudioTranscriptionConfig`) 등 구조화된 데이터 타입을 정의하기 위해 가져옵니다.
+* **1행 (`import os`)**: 디렉토리 경로 탐색, 파일 크기 확인, 환경변수 읽기 등을 위해 파이썬 표준 `os` 모듈을 가져옵니다.
+* **2행 (`import sys`)**: 사용자가 명령행 인자로 파일 경로를 직접 넘긴 경우(`sys.argv`) 처리하기 위해 가져옵니다.
+* **4~6행 (`from google import genai`, `from google.genai import types`)**: Google GenAI 최신 SDK 클라이언트 및 데이터 구조체 타입들을 로드합니다.
 
 ---
 
-### 8행 ~ 11행: 메인 함수 선언 및 클라이언트 인증
+### 8행 ~ 24행: TTS 출력 폴더 자동 탐색 (`get_tts_output_dir`)
 
 ```python
-8: def generate():
-9:     client = genai.Client(
-10:         api_key=os.environ.get("GEMINI_API_KEY"),
-11:     )
+8: def get_tts_output_dir() -> str:
+9:     """gemini_tts/outputs 폴더 경로를 자동으로 찾아 반환합니다."""
+10:     current_dir = os.path.dirname(os.path.abspath(__file__))
+11:     candidates = [
+12:         os.path.abspath(os.path.join(current_dir, "..", "gemini_tts", "outputs")),
+13:         os.path.abspath(os.path.join(current_dir, "gemini_tts", "outputs")),
+14:         os.path.abspath("gemini_tts/outputs"),
+15:     ]
+16:     for path in candidates:
+17:         if os.path.isdir(path):
+18:             return path
+19:     default_path = candidates[0]
+20:     os.makedirs(default_path, exist_ok=True)
+21:     return default_path
 ```
 
-* **8행**: 음성 인식 및 전사를 수행하는 메인 함수 `generate()`를 정의합니다.
-* **9~11행**: `os.environ.get("GEMINI_API_KEY")`로 API 키를 안전하게 읽어와 Google GenAI 클라이언트 인스턴스(`client`)를 초기화합니다.
+* **8~10행**: 스크립트가 실행되는 위치(`__file__`)를 기준으로 절대 경로를 계산합니다.
+* **11~15행 (`candidates`)**:
+  * 사용자가 `gemini_stt/` 서브폴더 안에서 실행하든(`..`), 프로젝트 루트에서 실행하든(`current_dir`), 어떤 위치에서든 **`gemini_tts/outputs` 폴더를 정확히 찾아낼 수 있도록 3가지 후보 경로**를 탐색합니다.
+* **16~21행**: 존재하는 디렉토리 경로를 반환하며, 만약 폴더가 아직 없다면 자동으로 생성한 뒤 경로를 돌려줍니다.
 
 ---
 
-### 13행 ~ 18행: 오디오 파일 경로 지정 및 바이너리 읽기
+### 24행 ~ 71행: 대화형 오디오 파일 선택 UI (`select_audio_file`)
 
 ```python
-13:     # 전사할 오디오 파일 (기본값: gemini_4_announcement.wav)
-14:     audio_file = sys.argv[1] if len(sys.argv) > 1 else "gemini_4_announcement.wav"
-15: 
-16:     with open(audio_file, "rb") as f:
-17:         audio_bytes = f.read()
+24: def select_audio_file() -> str | None:
+...
+27:     if len(sys.argv) > 1:
+28:         custom_path = sys.argv[1]
+29:         if os.path.exists(custom_path):
+30:             return custom_path
+...
+33:     tts_dir = get_tts_output_dir()
+34:     supported_exts = (".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac")
+35: 
+36:     audio_files = [
+37:         f for f in os.listdir(tts_dir)
+38:         if os.path.isfile(os.path.join(tts_dir, f)) and f.lower().endswith(supported_exts)
+39:     ]
+40:     audio_files.sort(
+41:         key=lambda f: os.path.getmtime(os.path.join(tts_dir, f)),
+42:         reverse=True
+43:     )
 ```
 
-* **14행**: 
-  * 사용자가 터미널에서 `python3 gemini_stt.py "내파일.wav"` 형태로 파일명을 넘기면 `sys.argv[1]`을 타겟 파일로 지정합니다.
-  * 별도의 인자를 주지 않고 실행하면 기본값으로 앞서 TTS로 생성했던 **`gemini_4_announcement.wav`**를 사용합니다.
-* **16행 (`with open(audio_file, "rb") as f:`)**: 오디오 파일은 텍스트가 아닌 바이너리 음원 데이터이므로 반드시 읽기 바이너리(`"rb"`) 모드로 엽니다. `with` 문을 사용하여 작업 완료 후 파일이 자동으로 안전하게 닫히도록 보장합니다.
-* **17행 (`audio_bytes = f.read()`)**: 파일 전체의 원시 바이너리 바이트 데이터를 읽어 메모리의 `audio_bytes` 변수에 담습니다.
-
----
-
-### 20행 ~ 33행: 모델 지정 및 멀티모달 Content 구성
+* **27~30행**: 사용자가 `python3 gemini_stt.py 파일경로` 형태로 직접 인자를 주면 메뉴 표출 없이 즉시 그 파일로 진행하도록 지원합니다.
+* **33~35행**: TTS 출력 폴더 경로를 가져오고, 지원하는 오디오 확장자 튜플을 정의합니다.
+* **36~43행**: 폴더 내 파일들을 탐색하고, **가장 최근에 생성된 파일(최신 수정 시간 역순)**이 1번으로 오도록 정렬합니다.
 
 ```python
-20:     model = "gemini-3.5-transcribe"
-21:     contents = [
-22:         types.Content(
-23:             role="user",
-24:             parts=[
-25:                 # 오디오 파일을 바이너리로 전달
-26:                 types.Part.from_bytes(
-27:                     data=audio_bytes,
-28:                     mime_type="audio/wav",
-29:                 ),
-30:                 types.Part.from_text(text=""),
-31:             ],
-32:         ),
-33:     ]
+45:     if not audio_files:
+46:         print(f"\n[안내] '{tts_dir}' 폴더에 오디오 파일이 없습니다.")
+...
+50:     print("\n" + "=" * 65)
+51:     print(f"📁 [gemini_tts/outputs] 폴더의 생성 오디오 파일 목록:")
+52:     print("=" * 65)
+53:     for idx, fname in enumerate(audio_files, 1):
+54:         full_path = os.path.join(tts_dir, fname)
+55:         size_kb = os.path.getsize(full_path) / 1024
+56:         size_str = f"{size_kb / 1024:.1f} MB" if size_kb >= 1024 else f"{size_kb:.1f} KB"
+57:         print(f" [{idx}] {fname:<30} ({size_str})")
+58:     print("-" * 65)
 ```
 
-* **20행 (`model = "gemini-3.5-transcribe"`)**: 오디오 음성 인식 및 전사에 특화된 구글의 전용 STT 모델을 타겟으로 지정합니다.
-* **21~23행**: 사용자 요청 역할을 나타내는 `role="user"`의 `types.Content` 객체를 리스트로 감쌉니다.
-* **26~29행 (`types.Part.from_bytes(...)`)**: **[오디오 주입 핵심]**
-  * 메모리에 읽어둔 `audio_bytes`와 함께 오디오 규격을 알리는 `mime_type="audio/wav"`를 지정하여 모델에 직접 바이트 스트림을 넘깁니다.
-  * 복잡한 클라우드 업로드 과정 없이 로컬 파일을 즉시 전송할 수 있는 가장 간결한 방식입니다.
-* **30행 (`types.Part.from_text(text="")`)**: 추가적인 텍스트 지시어(프롬프트) 자리입니다. 특정 번역 요구나 요약이 필요한 경우 여기에 텍스트를 추가할 수 있습니다.
-
----
-
-### 34행 ~ 39행: 고급 오디오 전사 설정 (`AudioTranscriptionConfig`)
+* **45~48행**: 폴더가 비어 있는 경우 TTS 생성 스크립트를 먼저 실행하라는 친절한 안내를 출력하고 종료합니다.
+* **50~58행**: 발견된 오디오 파일들의 번호, 파일명, 파일 용량(KB/MB)을 표 형태로 예쁘게 출력합니다.
 
 ```python
-34:     generate_content_config = types.GenerateContentConfig(
-35:         audio_transcription_config=types.AudioTranscriptionConfig(
-36:             word_timestamp=True,
-37:             diarization=True,
-38:         ),
-39:     )
+60:     while True:
+61:         try:
+62:             choice = input(f"👉 전사(STT)를 진행할 파일 번호를 선택하세요 (기본값 1): ").strip()
+63:             if not choice:
+64:                 selected_file = audio_files[0]
+65:                 break
+66:             idx = int(choice)
+67:             if 1 <= idx <= len(audio_files):
+68:                 selected_file = audio_files[idx - 1]
+69:                 break
+...
 ```
 
-* **34~35행**: 전사 모델 전용 고급 옵션을 전달하기 위해 `audio_transcription_config`를 생성합니다.
-* **36행 (`word_timestamp=True`)**:
-  * 음성 인식 결과에 각 단어별 시작/종료 시점의 정밀한 **타임스탬프(시간 정보)**를 모델이 함께 산출하도록 활성화합니다. (자막 제작 시 유용)
-* **37행 (`diarization=True`)**:
-  * 여러 명의 화자가 대화하는 경우 "화자 1", "화자 2"와 같이 **발화자를 자동으로 구분(화자 분리)**하도록 요청합니다.
+* **60~71행**: 사용자가 번호를 입력하거나 엔터(기본값 1번 선택)를 누르면 해당 파일의 절대 경로를 반환합니다. 잘못된 번호 입력 시 예외 처리가 적용되어 있습니다.
 
 ---
 
-### 41행 ~ 47행: 실시간 스트리밍 출력 루프
+### 73행 ~ 84행: MIME 타입 자동 판별 (`get_mime_type`)
 
 ```python
-41:     for chunk in client.models.generate_content_stream(
-42:         model=model,
-43:         contents=contents,
-44:         config=generate_content_config,
-45:     ):
-46:         if text := chunk.text:
-47:             print(text, end="")
+73: def get_mime_type(file_path: str) -> str:
+74:     ext = os.path.splitext(file_path)[1].lower()
+75:     mime_map = {
+76:         ".wav": "audio/wav",
+77:         ".mp3": "audio/mp3",
+78:         ".m4a": "audio/m4a",
+...
+84:     return mime_map.get(ext, "audio/wav")
 ```
 
-* **41~45행 (`client.models.generate_content_stream`)**:
-  * 전체 음성 파일의 처리가 끝날 때까지 멍하니 기다리지 않고, 모델이 음성을 듣고 분석하는 즉시 텍스트 조각을 전달받는 **스트리밍 제너레이터**입니다.
-* **46~47행 (`if text := chunk.text: print(text, end="")`)**:
-  * 파이썬의 바다코끼리 연산자(`:=`)를 사용하여 수신된 청크에 텍스트가 있을 때만 `text` 변수에 할당하고, 줄바꿈 없이(`end=""`) 터미널에 한 글자씩 실시간으로 출력합니다.
+* 파일 확장자를 분석하여 Gemini API가 요구하는 정확한 오디오 MIME 타입 문자열을 반환합니다.
 
 ---
 
-### 50행 ~ 51행: 실행 진입점
+### 86행 ~ 151행: STT 메인 전사 파이프라인 (`generate`)
 
 ```python
-50: if __name__ == "__main__":
-51:     generate()
+86: def generate():
+...
+95:     audio_path = select_audio_file()
+96:     if not audio_path:
+97:         return
+98: 
+99:     with open(audio_path, "rb") as f:
+100:        audio_bytes = f.read()
+...
+104:    contents = [
+105:        types.Content(
+106:            role="user",
+107:            parts=[
+108:                types.Part.from_bytes(
+109:                    data=audio_bytes,
+110:                    mime_type=mime_type,
+111:                ),
+112:                types.Part.from_text(text="이 오디오의 내용을 한 글자도 빠짐없이 한국어로 정확하게 텍스트로 받아적어(전사) 주세요."),
+113:            ],
+114:        ),
+115:    ]
 ```
 
-* **50~51행**: 터미널에서 `python3 gemini_stt.py` 명령으로 파일을 직접 실행했을 때 `generate()` 함수를 호출하여 전사를 시작합니다.
+* **95~97행**: 위에서 구현한 대화형 메뉴를 띄워 사용자가 선택한 오디오 파일 경로를 가져옵니다.
+* **99~100행**: 해당 오디오 파일을 바이너리(`rb`) 모드로 읽습니다.
+* **104~115행 (`types.Part.from_bytes`)**:
+  * 복잡한 클라우드 스토리지 업로드 절차 없이 읽어온 순수 바이트 데이터(`audio_bytes`)와 MIME 타입을 모델에 직접 전달합니다.
+  * 함께 전달하는 텍스트 프롬프트를 통해 누락 없는 한국어 텍스트 전사를 요청합니다.
+
+```python
+117:    generate_content_config = types.GenerateContentConfig(
+118:        audio_transcription_config=types.AudioTranscriptionConfig(
+119:            word_timestamp=True,
+120:            diarization=True,
+121:        ),
+122:    )
+123: 
+124:    models_to_try = ["gemini-3.5-transcribe", "gemini-3.6-flash"]
+125:    for model_name in models_to_try:
+...
+128:        response_stream = client.models.generate_content_stream(
+129:            model=model_name,
+130:            contents=contents,
+131:            config=generate_content_config,
+132:        )
+133:        for chunk in response_stream:
+134:            if text := chunk.text:
+135:                print(text, end="", flush=True)
+```
+
+* **117~122행**: 단어 타임스탬프(`word_timestamp`) 및 화자 분리(`diarization`) 고급 옵션을 설정합니다.
+* **124~125행**: `gemini-3.5-transcribe`를 우선 호출하되, 혹시 계정 권한 문제가 있는 경우 `gemini-3.6-flash`로 자동 이어받아 중단 없는 서비스를 보장합니다.
+* **128~135행**: `generate_content_stream`을 통해 모델이 음성을 인식하는 즉시 터미널 화면에 실시간으로 글자를 타이핑하듯 쏟아냅니다.
 
 ---
 
-## 🚀 실행 방법
+## 🚀 실행 화면 예시
 
 ```bash
-# 1. 기본 오디오 파일 전사 (gemini_4_announcement.wav)
-python3 gemini_stt.py
-
-# 2. 다른 오디오 파일 지정 전사
-python3 gemini_stt.py "회의녹음.wav"
+python3 gemini_stt/gemini_stt.py
 ```
 
-실행하면 오디오 속 음성이 즉시 터미널 화면에 실시간으로 타이핑되듯 전사됩니다!
+```plaintext
+=================================================================
+📁 [gemini_tts/outputs] 폴더의 생성 오디오 파일 목록:
+=================================================================
+ [1] gemini_4_announcement.wav          (1.1 MB)
+-----------------------------------------------------------------
+👉 전사(STT)를 진행할 파일 번호를 선택하세요 (기본값 1): 1
+
+선택된 파일: gemini_4_announcement.wav
+
+🚀 [gemini-3.5-transcribe] 모델로 오디오 텍스트 변환(STT) 시작...
+
+여러분, 깜짝 놀랄 만한 소식이 있습니다! 구글의 최신 모델 Gemini 4.0이 드디어 공개되었는데요...
+
+=================================================================
+✅ 음성 전사(STT)가 성공적으로 완료되었습니다!
+=================================================================
+```
