@@ -157,7 +157,7 @@
             type="text" 
             id="landing-url-input" 
             placeholder="유튜브 동영상 주소(URL)를 붙여넣으세요 (예: https://youtu.be/...)" 
-            onkeydown="if(event.key === 'Enter') startFromLanding()"
+            onkeydown="if(event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) startFromLanding()"
             class="flex-1 bg-transparent text-xs sm:text-sm text-[#1c1917] focus:outline-none placeholder-[#a39c90] min-w-0"
           />
           <button 
@@ -227,7 +227,7 @@
               type="text" 
               id="top-url-input" 
               placeholder="새로운 유튜브 URL 입력 후 Enter..." 
-              onkeydown="if(event.key === 'Enter') loadVideoFromUrl()"
+              onkeydown="if(event.key === 'Enter' && !event.isComposing && event.keyCode !== 229) loadVideoFromUrl()"
               class="w-full bg-[#eeeae1] text-[#2b2724] text-xs px-4 py-2.5 rounded-full border border-transparent focus:border-[#b8b0a2] focus:bg-white focus:outline-none transition-all placeholder-[#968f84]"
             />
             <button 
@@ -402,7 +402,9 @@
                   type="text" 
                   id="chat-user-input" 
                   placeholder="영상을 먼저 불러와 주세요" 
-                  onkeydown="if(event.key === 'Enter') sendChatMessage()"
+                  onkeydown="handleChatInputKeyDown(event)"
+                  oncompositionstart="isChatComposing = true"
+                  oncompositionend="isChatComposing = false"
                   class="flex-1 bg-[#eae5dc] text-[#2b2724] text-xs px-4 py-2.5 rounded-full border border-transparent focus:border-[#b8b0a2] focus:bg-white focus:outline-none transition placeholder-[#8c8579]"
                 />
                 <button 
@@ -1280,8 +1282,26 @@
       dynamicList.appendChild(aiBubble);
     }
 
+    // 💬 한글(IME) 조합 상태 및 중복 전송 방지 플래그
+    let isChatComposing = false;
+    let isSendingChat = false;
+
+    // 한글 입력 중 엔터 키 처리 (IME 조합 중복 전송 방지)
+    function handleChatInputKeyDown(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        // 한글 조합 중이거나 keyCode가 229인 경우 엔터는 조합 확정만 하고 메시지 전송은 차단
+        if (e.isComposing || isChatComposing || e.keyCode === 229) {
+          return;
+        }
+        e.preventDefault();
+        sendChatMessage();
+      }
+    }
+
     // AI 대화 메시지 전송
     async function sendChatMessage() {
+      if (isSendingChat) return;
+
       if (!currentVideo) {
         alert("먼저 상단에 유튜브 링크를 입력하거나 좌측의 샘플 영상을 선택해 주세요.");
         return;
@@ -1290,6 +1310,8 @@
       const input = document.getElementById("chat-user-input");
       const msg = input.value.trim();
       if (!msg) return;
+
+      isSendingChat = true;
 
       const apiKey = localStorage.getItem("GEMINI_API_KEY") || "";
       const chatContainer = document.getElementById("chat-messages-container");
@@ -1306,8 +1328,22 @@
         </div>
       `;
       dynamicList.appendChild(userBubble);
+
+      // 입력창 즉시 초기화
       input.value = "";
       chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      // 브라우저 IME의 조합 잔여 글자(마지막 글자 1타) 강제 청소
+      setTimeout(() => {
+        if (input.value && (msg.endsWith(input.value) || input.value === msg.slice(-1))) {
+          input.value = "";
+        }
+      }, 0);
+      setTimeout(() => {
+        if (input.value && (msg.endsWith(input.value) || input.value === msg.slice(-1))) {
+          input.value = "";
+        }
+      }, 40);
 
       // 2. 로딩 표시 활성화
       loadingEl.classList.remove("hidden");
@@ -1352,7 +1388,10 @@
       } finally {
         loadingEl.classList.add("hidden");
         sendBtn.disabled = false;
+        isSendingChat = false;
+        input.value = "";
         chatContainer.scrollTop = chatContainer.scrollHeight;
+        setTimeout(() => input.focus(), 50);
       }
     }
 
