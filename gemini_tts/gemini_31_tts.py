@@ -160,5 +160,3 @@ def parse_audio_mime_type(mime_type: str) -> dict[str, int | None]:
 
 if __name__ == "__main__":
     generate()
-
-
