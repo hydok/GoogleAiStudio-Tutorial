@@ -3,7 +3,7 @@ import sys
 from google import genai
 from google.genai import types
 
-#dev
+#dev message
 def adjust_to_aspect_ratio_3_5(image_bytes: bytes) -> bytes:
     """이미지 데이터를 가로:세로 = 3:5 비율로 정밀하게 맞춰 반환합니다."""
     try:
@@ -13,7 +13,7 @@ def adjust_to_aspect_ratio_3_5(image_bytes: bytes) -> bytes:
         img = Image.open(io.BytesIO(image_bytes))
         w, h = img.size
 
-        # 목표 비율: 가로 3 : 세로 5 (h / w = 5 / 3)
+        # 목표 비율: 가로 3 : 세로 5 (h / w = 5 / 3)    
         target_h = int(w * 5 / 3)
         if target_h <= h:
             # 높이가 더 길면 위아래 중앙 크롭
