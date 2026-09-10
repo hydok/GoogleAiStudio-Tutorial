@@ -5,7 +5,9 @@ import mimetypes
 import os
 import re
 import struct
+# pyrefly: ignore [missing-import]
 from google import genai
+# pyrefly: ignore [missing-import]
 from google.genai import types
 
 
