@@ -1,0 +1,120 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1789023039931,
+  "projectRoot": "/Users/gwondohyeong/Desktop/sesac/project/GoogleAiStudio-Tutorial",
+  "techStack": {
+    "languages": [],
+    "frameworks": [],
+    "packageManager": null,
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": null,
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": null,
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "__pycache__": {
+      "path": "__pycache__",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1789023039889,
+      "keyFiles": [
+        "check_paid_access.cpython-314.pyc",
+        "gemini_31_tts.cpython-314.pyc",
+        "gemini_stt.cpython-314.pyc",
+        "list_models.cpython-314.pyc",
+        "weather_ootd_generator.cpython-314.pyc"
+      ]
+    },
+    "downloads": {
+      "path": "downloads",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1789023039890,
+      "keyFiles": [
+        "네팔 긴급구호대 내일 귀국‥2진 파견 추진 (2026.09.10930MBC뉴스)_Wr3NHCk8sRg.m4a",
+        "일교차 큰 초가을 날씨‥전국에 강한 바람 (2026.09.10930MBC뉴스)_kfwABRH65pA.m4a"
+      ]
+    },
+    "gemini_stt": {
+      "path": "gemini_stt",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1789023039892,
+      "keyFiles": [
+        "README.md",
+        "gemini_stt.py"
+      ]
+    },
+    "gemini_tts": {
+      "path": "gemini_tts",
+      "purpose": null,
+      "fileCount": 2,
+      "lastAccessed": 1789023039892,
+      "keyFiles": [
+        "README.md",
+        "gemini_31_tts.py"
+      ]
+    },
+    "youtube_reel_ai": {
+      "path": "youtube_reel_ai",
+      "purpose": null,
+      "fileCount": 5,
+      "lastAccessed": 1789023039893,
+      "keyFiles": [
+        "README.md",
+        "gemini_chat.py",
+        "main.py",
+        "requirements.txt",
+        "video_helper.py"
+      ]
+    },
+    "youtube_transcriber_fastapi": {
+      "path": "youtube_transcriber_fastapi",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1789023039893,
+      "keyFiles": [
+        "README.md",
+        "downloader.py",
+        "history.json",
+        "history_manager.py",
+        "main.py"
+      ]
+    },
+    "youtube_transcriber_streamlit": {
+      "path": "youtube_transcriber_streamlit",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1789023039894,
+      "keyFiles": [
+        "README.md",
+        "app.py",
+        "downloader.py",
+        "history.json",
+        "history_manager.py"
+      ]
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}
