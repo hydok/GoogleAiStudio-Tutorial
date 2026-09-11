@@ -1,0 +1,46 @@
+:root {
+  --bg-canvas: #eae6de;
+  --bg-panel: #f7f5f0;
+  --bg-subtle: #eeeae1;
+  --border-color: #dcd6cb;
+  --border-dark: #b8b0a2;
+  --text-main: #2b2724;
+  --text-muted: #787268;
+  --accent-rust: #c86144;
+  --avatar-brick: #923826;
+  --btn-black: #1a1715;
+}
+
+body {
+  background-color: var(--bg-canvas);
+  color: var(--text-main);
+  font-family: Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  margin: 0;
+  padding: 24px 16px;
+}
+
+.font-serif-title {
+  font-family: 'Noto Serif KR', Georgia, serif;
+}
+
+.font-logo-serif {
+  font-family: 'Playfair Display', Georgia, serif;
+}
+
+/* 스크롤바 미니멀 스타일 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d4cdc2;
+  border-radius: 4px;
+}
+
+/* 마크다운 렌더링 스타일 */
+.chat-prose p { margin-bottom: 0.5rem; line-height: 1.55; }
+.chat-prose ul { list-style-type: disc; padding-left: 1.2rem; margin-bottom: 0.5rem; }
+.chat-prose li { margin-bottom: 0.2rem; }
+.chat-prose strong { color: #1a1715; font-weight: 700; }

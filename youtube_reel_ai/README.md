@@ -76,12 +76,18 @@
 
 ```plaintext
 youtube_reel_ai/
-├── main.py              # FastAPI 서버, REST API 엔드포인트 (/api/video-info, /api/chat, /api/timestamps, /api/resolve-video-url)
+├── main.py              # FastAPI 서버, REST API 엔드포인트 및 정적 파일(/static) 마운트
 ├── gemini_chat.py       # Google Gemini 3.6 Flash / 2.5 Flash 기반 비디오 컨텍스트 대화 엔진
 ├── video_helper.py      # yt-dlp 기반 유튜브 URL 파싱, 검색어 처리 및 실시간 메타데이터 추출기
+├── static/              # 정적 에셋 (CSS / JS 분리 모듈)
+│   ├── css/
+│   │   └── style.css    # 웜 베이지 테마 변수, 커스텀 스크롤바, 마크다운 스타일시트
+│   └── js/
+│       └── app.js       # SPA 상태 관리, 캐싱, 히스토리 동기화, AI 대화, 타임스탬프, IME 처리 등
 ├── templates/
-│   └── index.html       # 감성 저널 UI 1:1 정밀 재현 반응형 프론트엔드 (Tailwind CSS + Pure Vanilla JS)
+│   └── index.html       # 감성 저널 UI 1:1 정밀 재현 반응형 프론트엔드 (순수 HTML 템플릿 마크업)
 ├── requirements.txt     # FastAPI, Uvicorn, yt-dlp, Google GenAI 등 의존성 목록
+├── PROJECT_CONTEXT.md   # AI 간 맥락 인계 및 아키텍처 명세서
 └── README.md            # 상세 사용 및 기능 설명서
 ```
 
